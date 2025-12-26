@@ -3,6 +3,9 @@
 A peer-to-peer video calling app that works worldwide using WebRTC and PeerJS.
 
 ## Features
+- ✅ **Full PWA** - Install as a mobile app
+- ✅ **Splash Screen** - Professional app loading experience
+- ✅ **Auto Install Prompt** - Asks to install immediately
 - ✅ Works on **any WiFi/network** (not just local)
 - ✅ Persistent Device IDs (saved across refreshes)
 - ✅ Real-time peer-to-peer video and audio
@@ -10,6 +13,7 @@ A peer-to-peer video calling app that works worldwide using WebRTC and PeerJS.
 - ✅ Mute/unmute controls
 - ✅ No backend server needed
 - ✅ Free to deploy on Vercel
+- ✅ **Offline Ready** - Service worker caching
 
 ## Deploy to Vercel
 
@@ -61,9 +65,31 @@ This app uses **PeerJS** - a free WebRTC signaling service that:
 ```
 .
 ├── index.html      # Main app (includes HTML, CSS, JS)
+├── manifest.json   # PWA manifest for installation
+├── sw.js           # Service worker for offline functionality
+├── app-icon.png    # App icon (192x192 and 512x512)
+├── Splash.svg      # Splash screen image
 ├── vercel.json     # Vercel configuration
 └── README.md       # This file
 ```
+
+## PWA Features
+
+### Splash Screen
+- Shows for 3.5 seconds on app launch
+- Uses your custom `Splash.svg` image
+- Smooth fade-out animation
+
+### Auto Install Prompt
+- Appears 4 seconds after app loads
+- Only shows once (uses localStorage)
+- Can be dismissed or accepted
+- Works on Chrome, Edge, and Samsung Internet
+
+### Service Worker
+- Caches app for offline use
+- Instant loading after first visit
+- Auto-updates when you deploy changes
 
 ## Technology Stack
 
