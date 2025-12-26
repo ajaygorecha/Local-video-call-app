@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Local Video Call</title>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -128,6 +129,7 @@
 
         .device-id-info {
             flex: 1;
+            min-width: 0;
         }
 
         .device-id-label {
@@ -137,10 +139,11 @@
         }
 
         .device-id {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 600;
             color: var(--primary);
             font-family: 'Courier New', monospace;
+            word-break: break-all;
         }
 
         .copy-btn {
@@ -155,6 +158,8 @@
             align-items: center;
             gap: 4px;
             transition: background 0.2s;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .copy-btn:active {
@@ -176,19 +181,19 @@
         /* Call Section */
         .call-input-group {
             display: flex;
+            flex-direction: column;
             gap: 8px;
             margin-bottom: 16px;
         }
 
         .call-input {
-            flex: 1;
+            width: 100%;
             padding: 12px 16px;
             border: 2px solid var(--border);
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 13px;
             font-family: 'Courier New', monospace;
             transition: border-color 0.2s;
-            text-transform: uppercase;
         }
 
         .call-input:focus {
@@ -197,7 +202,8 @@
         }
 
         .call-btn {
-            padding: 12px 24px;
+            width: 100%;
+            padding: 14px 24px;
             background: var(--success);
             color: white;
             border: none;
@@ -207,6 +213,7 @@
             cursor: pointer;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             transition: background 0.2s;
         }
@@ -421,10 +428,12 @@
         }
 
         .caller-id {
-            font-size: 14px;
+            font-size: 11px;
             color: var(--text-light);
             margin-bottom: 24px;
             font-family: 'Courier New', monospace;
+            word-break: break-all;
+            line-height: 1.4;
         }
 
         .modal-actions {
@@ -460,11 +469,6 @@
             background: var(--danger);
             color: white;
         }
-
-        /* Hidden elements */
-        .hidden {
-            display: none !important;
-        }
     </style>
 </head>
 <body>
@@ -473,11 +477,11 @@
         <div class="header">
             <h1>
                 <i class="ri-vidicon-line"></i>
-                Local Video Call
+                Video Call
             </h1>
             <div class="server-status" id="serverStatus">
                 <div class="dot"></div>
-                <span>Connecting to server...</span>
+                <span>Connecting...</span>
             </div>
         </div>
 
@@ -511,8 +515,7 @@
                         type="text" 
                         class="call-input" 
                         id="targetDeviceId" 
-                        placeholder="Enter Device ID"
-                        maxlength="6"
+                        placeholder="Paste Device ID here"
                     >
                     <button class="call-btn" id="callBtn" disabled>
                         <i class="ri-phone-line"></i>
@@ -525,11 +528,12 @@
             <div class="card">
                 <div class="card-title">How to Use</div>
                 <div style="color: var(--text-light); font-size: 14px; line-height: 1.6;">
-                    1. Both devices must connect to the same WiFi network<br>
-                    2. Open this app on both devices using the same URL<br>
-                    3. Share your Device ID with the other person<br>
-                    4. Enter their Device ID and tap "Call"<br>
-                    5. Grant camera and microphone permissions when prompted
+                    1. Share your Device ID with someone<br>
+                    2. Get their Device ID and paste it above<br>
+                    3. Tap "Call" to start the video call<br>
+                    4. Grant camera and microphone permissions<br>
+                    <br>
+                    <strong>✨ Works worldwide!</strong> Both users can be on different WiFi networks.
                 </div>
             </div>
         </div>
@@ -580,23 +584,13 @@
     </div>
 
     <script>
-        // WebRTC Configuration
-        const configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        };
-
         // State
-        let myDeviceId = '';
-        let peerConnection = null;
+        let myPeerId = '';
+        let peer = null;
+        let currentCall = null;
         let localStream = null;
-        let ws = null;
         let isAudioEnabled = true;
         let isVideoEnabled = true;
-        let incomingCallData = null;
-        let currentTargetId = null;
 
         // DOM Elements
         const myDeviceIdElement = document.getElementById('myDeviceId');
@@ -618,164 +612,106 @@
         const statusContainer = document.getElementById('statusContainer');
         const serverStatus = document.getElementById('serverStatus');
 
-        // Generate Device ID
-        function generateDeviceId() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let id = '';
-            for (let i = 0; i < 6; i++) {
-                id += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return id;
+        // Generate unique ID
+        function generateId() {
+            return 'user-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
         }
 
-        // Get or create device ID (persistent)
-        function getDeviceId() {
-            let id = localStorage.getItem('deviceId');
+        // Get or create persistent peer ID
+        function getPeerId() {
+            let id = localStorage.getItem('peerId');
             if (!id) {
-                id = generateDeviceId();
-                localStorage.setItem('deviceId', id);
+                id = generateId();
+                localStorage.setItem('peerId', id);
             }
             return id;
         }
 
-        // Reset device ID
-        function resetDeviceId() {
-            const newId = generateDeviceId();
-            localStorage.setItem('deviceId', newId);
-            myDeviceId = newId;
-            myDeviceIdElement.textContent = newId;
+        // Reset peer ID
+        function resetPeerId() {
+            const newId = generateId();
+            localStorage.setItem('peerId', newId);
             
-            // Reconnect with new ID
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
+            if (peer) {
+                peer.destroy();
             }
-            connectWebSocket();
+            init();
             showStatus('New Device ID generated', 'success');
         }
 
-        // Initialize
+        // Initialize PeerJS
         function init() {
-            myDeviceId = getDeviceId();
-            myDeviceIdElement.textContent = myDeviceId;
-            connectWebSocket();
-        }
-
-        // Connect to WebSocket server
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}`;
+            myPeerId = getPeerId();
+            myDeviceIdElement.textContent = myPeerId;
             
-            ws = new WebSocket(wsUrl);
+            peer = new Peer(myPeerId, {
+                host: '0.peerjs.com',
+                port: 443,
+                path: '/',
+                secure: true,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             
-            ws.onopen = () => {
-                console.log('Connected to server');
+            peer.on('open', (id) => {
+                console.log('My peer ID:', id);
                 serverStatus.classList.add('connected');
                 serverStatus.querySelector('span').textContent = 'Connected';
-                
-                // Register device
-                ws.send(JSON.stringify({
-                    type: 'register',
-                    deviceId: myDeviceId
-                }));
-                
                 callBtn.disabled = false;
                 showStatus('Ready to make or receive calls', 'success');
-            };
+            });
             
-            ws.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
-                await handleSignalingMessage(data);
-            };
+            peer.on('call', (call) => {
+                callerDeviceIdElement.textContent = call.peer;
+                incomingCallModal.classList.add('active');
+                window.incomingCall = call;
+                playRingtone();
+            });
             
-            ws.onclose = () => {
-                console.log('Disconnected from server');
+            peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                if (err.type === 'unavailable-id') {
+                    showStatus('Device ID in use. Generating new...', 'warning');
+                    resetPeerId();
+                } else {
+                    showStatus('Connection error: ' + err.type, 'error');
+                    serverStatus.classList.remove('connected');
+                    serverStatus.querySelector('span').textContent = 'Disconnected';
+                }
+            });
+            
+            peer.on('disconnected', () => {
+                console.log('Disconnected');
                 serverStatus.classList.remove('connected');
-                serverStatus.querySelector('span').textContent = 'Disconnected - Reconnecting...';
-                callBtn.disabled = true;
+                serverStatus.querySelector('span').textContent = 'Reconnecting...';
                 
-                // Attempt to reconnect
-                setTimeout(connectWebSocket, 3000);
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                showStatus('Connection error. Make sure server is running.', 'error');
-            };
-        }
-
-        // Handle signaling messages
-        async function handleSignalingMessage(data) {
-            switch (data.type) {
-                case 'offer':
-                    incomingCallData = { from: data.from, offer: data.data };
-                    callerDeviceIdElement.textContent = data.from;
-                    incomingCallModal.classList.add('active');
-                    
-                    // Play ringtone if available
-                    playRingtone();
-                    break;
-                    
-                case 'answer':
-                    if (peerConnection) {
-                        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
+                setTimeout(() => {
+                    if (!peer.destroyed) {
+                        peer.reconnect();
                     }
-                    break;
-                    
-                case 'ice-candidate':
-                    if (peerConnection && data.data) {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.data));
-                    }
-                    break;
-                    
-                case 'hang-up':
-                    endCall();
-                    showStatus('Call ended', 'info');
-                    break;
-                    
-                case 'error':
-                    showStatus(data.message, 'error');
-                    endCall();
-                    break;
-            }
+                }, 3000);
+            });
         }
 
-        // Send signaling message
-        function sendSignal(type, to, data = null) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type,
-                    from: myDeviceId,
-                    to,
-                    data
-                }));
-            }
-        }
-
-        // Status Messages
         function showStatus(message, type = 'info') {
             const statusDiv = document.createElement('div');
             statusDiv.className = `status-message ${type}`;
-            statusDiv.innerHTML = `
-                <i class="ri-information-line"></i>
-                <span>${message}</span>
-            `;
+            statusDiv.innerHTML = `<i class="ri-information-line"></i><span>${message}</span>`;
             statusContainer.innerHTML = '';
             statusContainer.appendChild(statusDiv);
-            
-            setTimeout(() => {
-                statusDiv.remove();
-            }, 5000);
+            setTimeout(() => statusDiv.remove(), 5000);
         }
 
-        // Play ringtone (simple beep pattern)
         function playRingtone() {
-            // Browser's default notification if available
             if ('vibrate' in navigator) {
                 navigator.vibrate([200, 100, 200, 100, 200]);
             }
         }
 
-        // Start Local Stream
         async function startLocalStream() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
@@ -785,134 +721,84 @@
                 localVideo.srcObject = localStream;
                 return true;
             } catch (error) {
-                console.error('Error accessing media devices:', error);
-                showStatus('Failed to access camera/microphone. Please grant permissions.', 'error');
+                console.error('Media error:', error);
+                showStatus('Failed to access camera/microphone', 'error');
                 return false;
             }
         }
 
-        // Create Peer Connection
-        function createPeerConnection(targetId) {
-            peerConnection = new RTCPeerConnection(configuration);
-            
-            // Add local stream tracks
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-            
-            // Handle incoming stream
-            peerConnection.ontrack = (event) => {
-                remoteVideo.srcObject = event.streams[0];
-            };
-            
-            // Handle ICE candidates
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    sendSignal('ice-candidate', targetId, event.candidate);
-                }
-            };
-            
-            // Connection state
-            peerConnection.onconnectionstatechange = () => {
-                console.log('Connection state:', peerConnection.connectionState);
-                if (peerConnection.connectionState === 'connected') {
-                    showStatus('Call connected', 'success');
-                } else if (peerConnection.connectionState === 'disconnected' || 
-                           peerConnection.connectionState === 'failed') {
-                    endCall();
-                    showStatus('Connection lost', 'error');
-                }
-            };
-        }
-
-        // Make a Call
         async function makeCall() {
-            const targetId = targetDeviceIdInput.value.trim().toUpperCase();
+            const targetId = targetDeviceIdInput.value.trim();
             
             if (!targetId) {
                 showStatus('Please enter a Device ID', 'warning');
                 return;
             }
             
-            if (targetId === myDeviceId) {
+            if (targetId === myPeerId) {
                 showStatus('Cannot call yourself', 'warning');
                 return;
             }
             
-            if (targetId.length !== 6) {
-                showStatus('Device ID must be 6 characters', 'warning');
-                return;
-            }
-            
-            currentTargetId = targetId;
             showStatus('Calling...', 'info');
             
             const streamStarted = await startLocalStream();
             if (!streamStarted) return;
             
-            createPeerConnection(targetId);
+            currentCall = peer.call(targetId, localStream);
             
-            // Create and send offer
-            try {
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                sendSignal('offer', targetId, offer);
-                
+            currentCall.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
                 showCallScreen();
-            } catch (error) {
-                console.error('Error creating offer:', error);
-                showStatus('Failed to initiate call', 'error');
+                showStatus('Call connected', 'success');
+            });
+            
+            currentCall.on('close', () => endCall());
+            currentCall.on('error', (err) => {
+                console.error('Call error:', err);
+                showStatus('Call failed. User might be offline.', 'error');
                 endCall();
-            }
+            });
         }
 
-        // Accept Incoming Call
         async function acceptIncomingCall() {
             incomingCallModal.classList.remove('active');
             
             const streamStarted = await startLocalStream();
-            if (!streamStarted) return;
+            if (!streamStarted) {
+                if (window.incomingCall) window.incomingCall.close();
+                return;
+            }
             
-            const { from, offer } = incomingCallData;
-            currentTargetId = from;
-            createPeerConnection(from);
+            currentCall = window.incomingCall;
+            currentCall.answer(localStream);
             
-            try {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                sendSignal('answer', from, answer);
-                
+            currentCall.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
                 showCallScreen();
-            } catch (error) {
-                console.error('Error accepting call:', error);
-                showStatus('Failed to accept call', 'error');
-                endCall();
+                showStatus('Call connected', 'success');
+            });
+            
+            currentCall.on('close', () => endCall());
+        }
+
+        function rejectIncomingCall() {
+            incomingCallModal.classList.remove('active');
+            if (window.incomingCall) {
+                window.incomingCall.close();
+                window.incomingCall = null;
             }
         }
 
-        // Reject Incoming Call
-        function rejectIncomingCall() {
-            incomingCallModal.classList.remove('active');
-            sendSignal('hang-up', incomingCallData.from);
-            incomingCallData = null;
-        }
-
-        // Show Call Screen
         function showCallScreen() {
             videoContainer.classList.add('active');
             mainContent.style.display = 'none';
         }
 
-        // End Call
         function endCall() {
-            if (currentTargetId) {
-                sendSignal('hang-up', currentTargetId);
-            }
-            
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+            if (currentCall) {
+                currentCall.close();
+                currentCall = null;
             }
             
             if (localStream) {
@@ -928,11 +814,9 @@
             
             isAudioEnabled = true;
             isVideoEnabled = true;
-            currentTargetId = null;
             updateControlButtons();
         }
 
-        // Toggle Audio
         function toggleAudio() {
             if (localStream) {
                 const audioTrack = localStream.getAudioTracks()[0];
@@ -944,7 +828,6 @@
             }
         }
 
-        // Toggle Video
         function toggleVideo() {
             if (localStream) {
                 const videoTrack = localStream.getVideoTracks()[0];
@@ -956,34 +839,32 @@
             }
         }
 
-        // Update Control Buttons
         function updateControlButtons() {
-            toggleAudioBtn.innerHTML = isAudioEnabled 
-                ? '<i class="ri-mic-line"></i>' 
-                : '<i class="ri-mic-off-line"></i>';
+            toggleAudioBtn.innerHTML = isAudioEnabled ? '<i class="ri-mic-line"></i>' : '<i class="ri-mic-off-line"></i>';
             toggleAudioBtn.classList.toggle('muted', !isAudioEnabled);
             
-            toggleVideoBtn.innerHTML = isVideoEnabled 
-                ? '<i class="ri-vidicon-line"></i>' 
-                : '<i class="ri-vidicon-off-line"></i>';
+            toggleVideoBtn.innerHTML = isVideoEnabled ? '<i class="ri-vidicon-line"></i>' : '<i class="ri-vidicon-off-line"></i>';
             toggleVideoBtn.classList.toggle('muted', !isVideoEnabled);
         }
 
-        // Event Listeners
-        copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(myDeviceId);
-            copyBtn.innerHTML = '<i class="ri-check-line"></i> Copied';
-            setTimeout(() => {
-                copyBtn.innerHTML = '<i class="ri-file-copy-line"></i> Copy';
-            }, 2000);
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(myPeerId);
+                copyBtn.innerHTML = '<i class="ri-check-line"></i> Copied';
+                setTimeout(() => copyBtn.innerHTML = '<i class="ri-file-copy-line"></i> Copy', 2000);
+            } catch (err) {
+                const textArea = document.createElement('textarea');
+                textArea.value = myPeerId;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                copyBtn.innerHTML = '<i class="ri-check-line"></i> Copied';
+                setTimeout(() => copyBtn.innerHTML = '<i class="ri-file-copy-line"></i> Copy', 2000);
+            }
         });
 
-        resetIdBtn.addEventListener('click', resetDeviceId);
-
-        targetDeviceIdInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.toUpperCase();
-        });
-
+        resetIdBtn.addEventListener('click', resetPeerId);
         callBtn.addEventListener('click', makeCall);
         acceptCallBtn.addEventListener('click', acceptIncomingCall);
         rejectCallBtn.addEventListener('click', rejectIncomingCall);
@@ -991,7 +872,6 @@
         toggleAudioBtn.addEventListener('click', toggleAudio);
         toggleVideoBtn.addEventListener('click', toggleVideo);
 
-        // Initialize app
         init();
     </script>
 </body>
