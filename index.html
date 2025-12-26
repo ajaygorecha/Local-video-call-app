@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -14,6 +13,7 @@
     <title>Video Call</title>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -48,7 +48,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #29C940;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -67,7 +67,6 @@
                 transform: scale(0.5);
                 opacity: 0;
             }
-
             to {
                 transform: scale(1);
                 opacity: 1;
@@ -90,7 +89,7 @@
             background: var(--card);
             border-radius: 12px;
             padding: 16px 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             display: none;
             align-items: center;
             gap: 12px;
@@ -162,7 +161,7 @@
             background: var(--card);
             padding: 16px 20px;
             border-bottom: 1px solid var(--border);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .header h1 {
@@ -199,15 +198,8 @@
         }
 
         @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         /* Main Content */
@@ -223,7 +215,7 @@
             background: var(--card);
             border-radius: 12px;
             padding: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         .card-title {
@@ -266,6 +258,26 @@
             color: var(--primary);
             font-family: 'Courier New', monospace;
             word-break: break-all;
+        }
+
+        .qr-code-section {
+            margin-top: 16px;
+            text-align: center;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+        }
+
+        .qr-code-canvas {
+            margin: 0 auto;
+            display: block;
+        }
+
+        .qr-code-label {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 8px;
         }
 
         .copy-btn {
@@ -386,8 +398,8 @@
             height: 140px;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.2);
         }
 
         .local-video {
@@ -399,7 +411,7 @@
 
         .call-controls {
             padding: 20px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0,0,0,0.8);
             display: flex;
             justify-content: center;
             gap: 16px;
@@ -429,7 +441,7 @@
 
         .control-btn.toggle-audio,
         .control-btn.toggle-video {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255,255,255,0.2);
             color: white;
         }
 
@@ -474,7 +486,7 @@
             top: 20px;
             left: 20px;
             padding: 8px 16px;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0,0,0,0.6);
             color: white;
             border-radius: 20px;
             font-size: 14px;
@@ -499,7 +511,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0,0,0,0.8);
             z-index: 2000;
             align-items: center;
             justify-content: center;
@@ -525,7 +537,6 @@
                 transform: translateY(100px);
                 opacity: 0;
             }
-
             to {
                 transform: translateY(0);
                 opacity: 1;
@@ -540,15 +551,8 @@
         }
 
         @keyframes ring {
-
-            0%,
-            100% {
-                transform: rotate(-15deg);
-            }
-
-            50% {
-                transform: rotate(15deg);
-            }
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(15deg); }
         }
 
         .caller-info {
@@ -601,7 +605,6 @@
         }
     </style>
 </head>
-
 <body>
     <!-- Splash Screen -->
     <div class="splash-screen" id="splashScreen">
@@ -650,6 +653,13 @@
                         Copy
                     </button>
                 </div>
+                
+                <!-- QR Code -->
+                <div class="qr-code-section">
+                    <div id="qrcode"></div>
+                    <div class="qr-code-label">Scan to get my Device ID</div>
+                </div>
+                
                 <button class="reset-id-btn" id="resetIdBtn">
                     <i class="ri-restart-line"></i> Generate New ID
                 </button>
@@ -660,7 +670,12 @@
             <div class="card">
                 <div class="card-title">Make a Call</div>
                 <div class="call-input-group">
-                    <input type="text" class="call-input" id="targetDeviceId" placeholder="Paste Device ID here">
+                    <input 
+                        type="text" 
+                        class="call-input" 
+                        id="targetDeviceId" 
+                        placeholder="Paste Device ID here"
+                    >
                     <button class="call-btn" id="callBtn" disabled>
                         <i class="ri-phone-line"></i>
                         Call
@@ -753,7 +768,7 @@
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-
+            
             // Show install prompt after splash screen
             setTimeout(() => {
                 // Check if user hasn't dismissed it before
@@ -768,14 +783,14 @@
             if (!deferredPrompt) {
                 return;
             }
-
+            
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
-
+            
             if (outcome === 'accepted') {
                 console.log('App installed');
             }
-
+            
             deferredPrompt = null;
             installPrompt.classList.remove('show');
         });
@@ -820,9 +835,14 @@
         const statusContainer = document.getElementById('statusContainer');
         const serverStatus = document.getElementById('serverStatus');
 
-        // Generate unique ID
+        // Generate unique ID (shorter version)
         function generateId() {
-            return 'user-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let id = '';
+            for (let i = 0; i < 8; i++) {
+                id += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return id;
         }
 
         // Get or create persistent peer ID
@@ -839,7 +859,7 @@
         function resetPeerId() {
             const newId = generateId();
             localStorage.setItem('peerId', newId);
-
+            
             if (peer) {
                 peer.destroy();
             }
@@ -851,7 +871,18 @@
         function init() {
             myPeerId = getPeerId();
             myDeviceIdElement.textContent = myPeerId;
-
+            
+            // Generate QR Code
+            document.getElementById('qrcode').innerHTML = '';
+            new QRCode(document.getElementById('qrcode'), {
+                text: myPeerId,
+                width: 180,
+                height: 180,
+                colorDark: '#6366f1',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
             peer = new Peer(myPeerId, {
                 host: '0.peerjs.com',
                 port: 443,
@@ -864,7 +895,7 @@
                     ]
                 }
             });
-
+            
             peer.on('open', (id) => {
                 console.log('My peer ID:', id);
                 serverStatus.classList.add('connected');
@@ -872,14 +903,14 @@
                 callBtn.disabled = false;
                 showStatus('Ready to make or receive calls', 'success');
             });
-
+            
             peer.on('call', (call) => {
                 callerDeviceIdElement.textContent = call.peer;
                 incomingCallModal.classList.add('active');
                 window.incomingCall = call;
                 playRingtone();
             });
-
+            
             peer.on('error', (err) => {
                 console.error('PeerJS error:', err);
                 if (err.type === 'unavailable-id') {
@@ -891,12 +922,12 @@
                     serverStatus.querySelector('span').textContent = 'Disconnected';
                 }
             });
-
+            
             peer.on('disconnected', () => {
                 console.log('Disconnected');
                 serverStatus.classList.remove('connected');
                 serverStatus.querySelector('span').textContent = 'Reconnecting...';
-
+                
                 setTimeout(() => {
                     if (!peer.destroyed) {
                         peer.reconnect();
@@ -914,9 +945,50 @@
             setTimeout(() => statusDiv.remove(), 5000);
         }
 
+        // Play ringtone (using Web Audio API for better sound)
+        let ringtoneInterval;
         function playRingtone() {
+            // Vibrate if available
             if ('vibrate' in navigator) {
                 navigator.vibrate([200, 100, 200, 100, 200]);
+            }
+            
+            // Play sound using Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            function beep() {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800; // Frequency in Hz
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            }
+            
+            // Play ringtone pattern (beep every 1 second)
+            beep();
+            ringtoneInterval = setInterval(beep, 1000);
+            
+            // Stop after 30 seconds
+            setTimeout(() => {
+                if (ringtoneInterval) {
+                    clearInterval(ringtoneInterval);
+                }
+            }, 30000);
+        }
+        
+        function stopRingtone() {
+            if (ringtoneInterval) {
+                clearInterval(ringtoneInterval);
+                ringtoneInterval = null;
             }
         }
 
@@ -937,30 +1009,30 @@
 
         async function makeCall() {
             const targetId = targetDeviceIdInput.value.trim();
-
+            
             if (!targetId) {
                 showStatus('Please enter a Device ID', 'warning');
                 return;
             }
-
+            
             if (targetId === myPeerId) {
                 showStatus('Cannot call yourself', 'warning');
                 return;
             }
-
+            
             showStatus('Calling...', 'info');
-
+            
             const streamStarted = await startLocalStream();
             if (!streamStarted) return;
-
+            
             currentCall = peer.call(targetId, localStream);
-
+            
             currentCall.on('stream', (remoteStream) => {
                 remoteVideo.srcObject = remoteStream;
                 showCallScreen();
                 showStatus('Call connected', 'success');
             });
-
+            
             currentCall.on('close', () => endCall());
             currentCall.on('error', (err) => {
                 console.error('Call error:', err);
@@ -971,27 +1043,29 @@
 
         async function acceptIncomingCall() {
             incomingCallModal.classList.remove('active');
-
+            stopRingtone();
+            
             const streamStarted = await startLocalStream();
             if (!streamStarted) {
                 if (window.incomingCall) window.incomingCall.close();
                 return;
             }
-
+            
             currentCall = window.incomingCall;
             currentCall.answer(localStream);
-
+            
             currentCall.on('stream', (remoteStream) => {
                 remoteVideo.srcObject = remoteStream;
                 showCallScreen();
                 showStatus('Call connected', 'success');
             });
-
+            
             currentCall.on('close', () => endCall());
         }
 
         function rejectIncomingCall() {
             incomingCallModal.classList.remove('active');
+            stopRingtone();
             if (window.incomingCall) {
                 window.incomingCall.close();
                 window.incomingCall = null;
@@ -1008,18 +1082,18 @@
                 currentCall.close();
                 currentCall = null;
             }
-
+            
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
-
+            
             videoContainer.classList.remove('active');
             mainContent.style.display = 'flex';
-
+            
             localVideo.srcObject = null;
             remoteVideo.srcObject = null;
-
+            
             isAudioEnabled = true;
             isVideoEnabled = true;
             updateControlButtons();
@@ -1050,7 +1124,7 @@
         function updateControlButtons() {
             toggleAudioBtn.innerHTML = isAudioEnabled ? '<i class="ri-mic-line"></i>' : '<i class="ri-mic-off-line"></i>';
             toggleAudioBtn.classList.toggle('muted', !isAudioEnabled);
-
+            
             toggleVideoBtn.innerHTML = isVideoEnabled ? '<i class="ri-vidicon-line"></i>' : '<i class="ri-vidicon-off-line"></i>';
             toggleVideoBtn.classList.toggle('muted', !isVideoEnabled);
         }
@@ -1083,5 +1157,4 @@
         init();
     </script>
 </body>
-
 </html>
