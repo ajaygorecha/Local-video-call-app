@@ -62,6 +62,31 @@
             color: var(--primary);
         }
 
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        .server-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .server-status.connected .dot {
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         /* Main Content */
         .main-content {
             flex: 1;
@@ -136,6 +161,18 @@
             background: var(--primary-dark);
         }
 
+        .reset-id-btn {
+            padding: 8px 12px;
+            background: var(--text-light);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 8px;
+            width: 100%;
+        }
+
         /* Call Section */
         .call-input-group {
             display: flex;
@@ -151,6 +188,7 @@
             font-size: 16px;
             font-family: 'Courier New', monospace;
             transition: border-color 0.2s;
+            text-transform: uppercase;
         }
 
         .call-input:focus {
@@ -324,11 +362,6 @@
             animation: pulse 2s infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
         /* Incoming Call Modal */
         .incoming-call-modal {
             display: none;
@@ -355,12 +388,30 @@
             max-width: 400px;
             width: 100%;
             text-align: center;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
 
         .caller-icon {
             font-size: 64px;
             color: var(--primary);
             margin-bottom: 16px;
+            animation: ring 1s ease-in-out infinite;
+        }
+
+        @keyframes ring {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(15deg); }
         }
 
         .caller-info {
@@ -393,6 +444,11 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            transition: transform 0.1s;
+        }
+
+        .modal-btn:active {
+            transform: scale(0.98);
         }
 
         .modal-btn.accept {
@@ -409,15 +465,6 @@
         .hidden {
             display: none !important;
         }
-
-        /* Loading spinner */
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .spinner {
-            animation: spin 1s linear infinite;
-        }
     </style>
 </head>
 <body>
@@ -428,6 +475,10 @@
                 <i class="ri-vidicon-line"></i>
                 Local Video Call
             </h1>
+            <div class="server-status" id="serverStatus">
+                <div class="dot"></div>
+                <span>Connecting to server...</span>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -446,6 +497,9 @@
                         Copy
                     </button>
                 </div>
+                <button class="reset-id-btn" id="resetIdBtn">
+                    <i class="ri-restart-line"></i> Generate New ID
+                </button>
                 <div id="statusContainer"></div>
             </div>
 
@@ -458,8 +512,9 @@
                         class="call-input" 
                         id="targetDeviceId" 
                         placeholder="Enter Device ID"
+                        maxlength="6"
                     >
-                    <button class="call-btn" id="callBtn">
+                    <button class="call-btn" id="callBtn" disabled>
                         <i class="ri-phone-line"></i>
                         Call
                     </button>
@@ -470,10 +525,11 @@
             <div class="card">
                 <div class="card-title">How to Use</div>
                 <div style="color: var(--text-light); font-size: 14px; line-height: 1.6;">
-                    1. Share your Device ID with someone on the same WiFi<br>
-                    2. Enter their Device ID to call them<br>
-                    3. Both devices must be on the same network<br>
-                    4. Grant camera and microphone permissions when prompted
+                    1. Both devices must connect to the same WiFi network<br>
+                    2. Open this app on both devices using the same URL<br>
+                    3. Share your Device ID with the other person<br>
+                    4. Enter their Device ID and tap "Call"<br>
+                    5. Grant camera and microphone permissions when prompted
                 </div>
             </div>
         </div>
@@ -536,14 +592,16 @@
         let myDeviceId = '';
         let peerConnection = null;
         let localStream = null;
-        let signalingChannel = null;
+        let ws = null;
         let isAudioEnabled = true;
         let isVideoEnabled = true;
         let incomingCallData = null;
+        let currentTargetId = null;
 
         // DOM Elements
         const myDeviceIdElement = document.getElementById('myDeviceId');
         const copyBtn = document.getElementById('copyBtn');
+        const resetIdBtn = document.getElementById('resetIdBtn');
         const targetDeviceIdInput = document.getElementById('targetDeviceId');
         const callBtn = document.getElementById('callBtn');
         const videoContainer = document.getElementById('videoContainer');
@@ -558,6 +616,7 @@
         const acceptCallBtn = document.getElementById('acceptCall');
         const rejectCallBtn = document.getElementById('rejectCall');
         const statusContainer = document.getElementById('statusContainer');
+        const serverStatus = document.getElementById('serverStatus');
 
         // Generate Device ID
         function generateDeviceId() {
@@ -569,12 +628,127 @@
             return id;
         }
 
+        // Get or create device ID (persistent)
+        function getDeviceId() {
+            let id = localStorage.getItem('deviceId');
+            if (!id) {
+                id = generateDeviceId();
+                localStorage.setItem('deviceId', id);
+            }
+            return id;
+        }
+
+        // Reset device ID
+        function resetDeviceId() {
+            const newId = generateDeviceId();
+            localStorage.setItem('deviceId', newId);
+            myDeviceId = newId;
+            myDeviceIdElement.textContent = newId;
+            
+            // Reconnect with new ID
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+            connectWebSocket();
+            showStatus('New Device ID generated', 'success');
+        }
+
         // Initialize
         function init() {
-            myDeviceId = generateDeviceId();
+            myDeviceId = getDeviceId();
             myDeviceIdElement.textContent = myDeviceId;
-            setupSignaling();
-            showStatus('Ready to make or receive calls', 'success');
+            connectWebSocket();
+        }
+
+        // Connect to WebSocket server
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('Connected to server');
+                serverStatus.classList.add('connected');
+                serverStatus.querySelector('span').textContent = 'Connected';
+                
+                // Register device
+                ws.send(JSON.stringify({
+                    type: 'register',
+                    deviceId: myDeviceId
+                }));
+                
+                callBtn.disabled = false;
+                showStatus('Ready to make or receive calls', 'success');
+            };
+            
+            ws.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                await handleSignalingMessage(data);
+            };
+            
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                serverStatus.classList.remove('connected');
+                serverStatus.querySelector('span').textContent = 'Disconnected - Reconnecting...';
+                callBtn.disabled = true;
+                
+                // Attempt to reconnect
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                showStatus('Connection error. Make sure server is running.', 'error');
+            };
+        }
+
+        // Handle signaling messages
+        async function handleSignalingMessage(data) {
+            switch (data.type) {
+                case 'offer':
+                    incomingCallData = { from: data.from, offer: data.data };
+                    callerDeviceIdElement.textContent = data.from;
+                    incomingCallModal.classList.add('active');
+                    
+                    // Play ringtone if available
+                    playRingtone();
+                    break;
+                    
+                case 'answer':
+                    if (peerConnection) {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
+                    }
+                    break;
+                    
+                case 'ice-candidate':
+                    if (peerConnection && data.data) {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.data));
+                    }
+                    break;
+                    
+                case 'hang-up':
+                    endCall();
+                    showStatus('Call ended', 'info');
+                    break;
+                    
+                case 'error':
+                    showStatus(data.message, 'error');
+                    endCall();
+                    break;
+            }
+        }
+
+        // Send signaling message
+        function sendSignal(type, to, data = null) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type,
+                    from: myDeviceId,
+                    to,
+                    data
+                }));
+            }
         }
 
         // Status Messages
@@ -593,65 +767,26 @@
             }, 5000);
         }
 
-        // Simple Signaling using BroadcastChannel (same browser instance)
-        // For real same-wifi usage, you'd need a simple WebSocket signaling server
-        function setupSignaling() {
-            signalingChannel = new BroadcastChannel('video-call-signaling');
-            
-            signalingChannel.onmessage = async (event) => {
-                const { type, from, to, data } = event.data;
-                
-                if (to !== myDeviceId) return;
-                
-                switch (type) {
-                    case 'offer':
-                        incomingCallData = { from, offer: data };
-                        callerDeviceIdElement.textContent = from;
-                        incomingCallModal.classList.add('active');
-                        break;
-                        
-                    case 'answer':
-                        if (peerConnection) {
-                            await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-                        }
-                        break;
-                        
-                    case 'ice-candidate':
-                        if (peerConnection && data) {
-                            await peerConnection.addIceCandidate(new RTCIceCandidate(data));
-                        }
-                        break;
-                        
-                    case 'hang-up':
-                        endCall();
-                        showStatus('Call ended by other user', 'info');
-                        break;
-                }
-            };
-        }
-
-        // Send signaling message
-        function sendSignal(type, to, data = null) {
-            signalingChannel.postMessage({
-                type,
-                from: myDeviceId,
-                to,
-                data
-            });
+        // Play ringtone (simple beep pattern)
+        function playRingtone() {
+            // Browser's default notification if available
+            if ('vibrate' in navigator) {
+                navigator.vibrate([200, 100, 200, 100, 200]);
+            }
         }
 
         // Start Local Stream
         async function startLocalStream() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user' },
-                    audio: true
+                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: { echoCancellation: true, noiseSuppression: true }
                 });
                 localVideo.srcObject = localStream;
                 return true;
             } catch (error) {
                 console.error('Error accessing media devices:', error);
-                showStatus('Failed to access camera/microphone', 'error');
+                showStatus('Failed to access camera/microphone. Please grant permissions.', 'error');
                 return false;
             }
         }
@@ -680,8 +815,10 @@
             // Connection state
             peerConnection.onconnectionstatechange = () => {
                 console.log('Connection state:', peerConnection.connectionState);
-                if (peerConnection.connectionState === 'disconnected' || 
-                    peerConnection.connectionState === 'failed') {
+                if (peerConnection.connectionState === 'connected') {
+                    showStatus('Call connected', 'success');
+                } else if (peerConnection.connectionState === 'disconnected' || 
+                           peerConnection.connectionState === 'failed') {
                     endCall();
                     showStatus('Connection lost', 'error');
                 }
@@ -702,7 +839,13 @@
                 return;
             }
             
-            showStatus('Connecting...', 'info');
+            if (targetId.length !== 6) {
+                showStatus('Device ID must be 6 characters', 'warning');
+                return;
+            }
+            
+            currentTargetId = targetId;
+            showStatus('Calling...', 'info');
             
             const streamStarted = await startLocalStream();
             if (!streamStarted) return;
@@ -710,11 +853,17 @@
             createPeerConnection(targetId);
             
             // Create and send offer
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            sendSignal('offer', targetId, offer);
-            
-            showCallScreen();
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                sendSignal('offer', targetId, offer);
+                
+                showCallScreen();
+            } catch (error) {
+                console.error('Error creating offer:', error);
+                showStatus('Failed to initiate call', 'error');
+                endCall();
+            }
         }
 
         // Accept Incoming Call
@@ -725,14 +874,21 @@
             if (!streamStarted) return;
             
             const { from, offer } = incomingCallData;
+            currentTargetId = from;
             createPeerConnection(from);
             
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            sendSignal('answer', from, answer);
-            
-            showCallScreen();
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                sendSignal('answer', from, answer);
+                
+                showCallScreen();
+            } catch (error) {
+                console.error('Error accepting call:', error);
+                showStatus('Failed to accept call', 'error');
+                endCall();
+            }
         }
 
         // Reject Incoming Call
@@ -750,6 +906,10 @@
 
         // End Call
         function endCall() {
+            if (currentTargetId) {
+                sendSignal('hang-up', currentTargetId);
+            }
+            
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
@@ -768,6 +928,7 @@
             
             isAudioEnabled = true;
             isVideoEnabled = true;
+            currentTargetId = null;
             updateControlButtons();
         }
 
@@ -808,7 +969,7 @@
             toggleVideoBtn.classList.toggle('muted', !isVideoEnabled);
         }
 
-        // Copy Device ID
+        // Event Listeners
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(myDeviceId);
             copyBtn.innerHTML = '<i class="ri-check-line"></i> Copied';
@@ -817,17 +978,16 @@
             }, 2000);
         });
 
-        // Event Listeners
+        resetIdBtn.addEventListener('click', resetDeviceId);
+
+        targetDeviceIdInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
         callBtn.addEventListener('click', makeCall);
         acceptCallBtn.addEventListener('click', acceptIncomingCall);
         rejectCallBtn.addEventListener('click', rejectIncomingCall);
-        endCallBtn.addEventListener('click', () => {
-            const targetId = targetDeviceIdInput.value.trim().toUpperCase() || incomingCallData?.from;
-            if (targetId) {
-                sendSignal('hang-up', targetId);
-            }
-            endCall();
-        });
+        endCallBtn.addEventListener('click', endCall);
         toggleAudioBtn.addEventListener('click', toggleAudio);
         toggleVideoBtn.addEventListener('click', toggleVideo);
 
