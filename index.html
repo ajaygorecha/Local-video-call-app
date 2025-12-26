@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Local Video Call</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --bg: #f9fafb;
+            --card: #ffffff;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--card);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header h1 i {
+            color: var(--primary);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        /* Device ID Section */
+        .device-id-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .device-id-section i {
+            font-size: 24px;
+            color: var(--primary);
+        }
+
+        .device-id-info {
+            flex: 1;
+        }
+
+        .device-id-label {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+
+        .device-id {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+            font-family: 'Courier New', monospace;
+        }
+
+        .copy-btn {
+            padding: 8px 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:active {
+            background: var(--primary-dark);
+        }
+
+        /* Call Section */
+        .call-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .call-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.2s;
+        }
+
+        .call-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .call-btn {
+            padding: 12px 24px;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .call-btn:active {
+            background: #059669;
+        }
+
+        .call-btn:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+        }
+
+        /* Video Section */
+        .video-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 1000;
+        }
+
+        .video-container.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .remote-video-wrapper {
+            flex: 1;
+            position: relative;
+            background: #1a1a1a;
+        }
+
+        .remote-video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .local-video-wrapper {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 100px;
+            height: 140px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .local-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .call-controls {
+            padding: 20px;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .control-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .control-btn.end-call {
+            background: var(--danger);
+            color: white;
+        }
+
+        .control-btn.toggle-audio,
+        .control-btn.toggle-video {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .control-btn.muted {
+            background: var(--danger);
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .status-message.info {
+            background: #eff6ff;
+            color: #1e40af;
+        }
+
+        .status-message.success {
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .status-message.warning {
+            background: #fffbeb;
+            color: #92400e;
+        }
+
+        .status-message.error {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        /* Connection Status */
+        .connection-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Incoming Call Modal */
+        .incoming-call-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .incoming-call-modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 32px 24px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .caller-icon {
+            font-size: 64px;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+
+        .caller-info {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .caller-id {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 24px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .modal-btn.accept {
+            background: var(--success);
+            color: white;
+        }
+
+        .modal-btn.reject {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Hidden elements */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Loading spinner */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>
+                <i class="ri-vidicon-line"></i>
+                Local Video Call
+            </h1>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Your Device ID -->
+            <div class="card">
+                <div class="card-title">Your Device ID</div>
+                <div class="device-id-section">
+                    <i class="ri-smartphone-line"></i>
+                    <div class="device-id-info">
+                        <div class="device-id-label">Share this ID to receive calls</div>
+                        <div class="device-id" id="myDeviceId">Generating...</div>
+                    </div>
+                    <button class="copy-btn" id="copyBtn">
+                        <i class="ri-file-copy-line"></i>
+                        Copy
+                    </button>
+                </div>
+                <div id="statusContainer"></div>
+            </div>
+
+            <!-- Make a Call -->
+            <div class="card">
+                <div class="card-title">Make a Call</div>
+                <div class="call-input-group">
+                    <input 
+                        type="text" 
+                        class="call-input" 
+                        id="targetDeviceId" 
+                        placeholder="Enter Device ID"
+                    >
+                    <button class="call-btn" id="callBtn">
+                        <i class="ri-phone-line"></i>
+                        Call
+                    </button>
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="card">
+                <div class="card-title">How to Use</div>
+                <div style="color: var(--text-light); font-size: 14px; line-height: 1.6;">
+                    1. Share your Device ID with someone on the same WiFi<br>
+                    2. Enter their Device ID to call them<br>
+                    3. Both devices must be on the same network<br>
+                    4. Grant camera and microphone permissions when prompted
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Call Screen -->
+        <div class="video-container" id="videoContainer">
+            <div class="remote-video-wrapper">
+                <video class="remote-video" id="remoteVideo" autoplay playsinline></video>
+                <div class="connection-status">
+                    <div class="status-dot"></div>
+                    <span>Connected</span>
+                </div>
+                <div class="local-video-wrapper">
+                    <video class="local-video" id="localVideo" autoplay playsinline muted></video>
+                </div>
+            </div>
+            <div class="call-controls">
+                <button class="control-btn toggle-audio" id="toggleAudio">
+                    <i class="ri-mic-line"></i>
+                </button>
+                <button class="control-btn end-call" id="endCall">
+                    <i class="ri-phone-line"></i>
+                </button>
+                <button class="control-btn toggle-video" id="toggleVideo">
+                    <i class="ri-vidicon-line"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Incoming Call Modal -->
+        <div class="incoming-call-modal" id="incomingCallModal">
+            <div class="modal-content">
+                <i class="ri-phone-fill caller-icon"></i>
+                <div class="caller-info">Incoming Call</div>
+                <div class="caller-id" id="callerDeviceId"></div>
+                <div class="modal-actions">
+                    <button class="modal-btn reject" id="rejectCall">
+                        <i class="ri-close-line"></i>
+                        Reject
+                    </button>
+                    <button class="modal-btn accept" id="acceptCall">
+                        <i class="ri-check-line"></i>
+                        Accept
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebRTC Configuration
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        // State
+        let myDeviceId = '';
+        let peerConnection = null;
+        let localStream = null;
+        let signalingChannel = null;
+        let isAudioEnabled = true;
+        let isVideoEnabled = true;
+        let incomingCallData = null;
+
+        // DOM Elements
+        const myDeviceIdElement = document.getElementById('myDeviceId');
+        const copyBtn = document.getElementById('copyBtn');
+        const targetDeviceIdInput = document.getElementById('targetDeviceId');
+        const callBtn = document.getElementById('callBtn');
+        const videoContainer = document.getElementById('videoContainer');
+        const mainContent = document.getElementById('mainContent');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const toggleAudioBtn = document.getElementById('toggleAudio');
+        const toggleVideoBtn = document.getElementById('toggleVideo');
+        const endCallBtn = document.getElementById('endCall');
+        const incomingCallModal = document.getElementById('incomingCallModal');
+        const callerDeviceIdElement = document.getElementById('callerDeviceId');
+        const acceptCallBtn = document.getElementById('acceptCall');
+        const rejectCallBtn = document.getElementById('rejectCall');
+        const statusContainer = document.getElementById('statusContainer');
+
+        // Generate Device ID
+        function generateDeviceId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let id = '';
+            for (let i = 0; i < 6; i++) {
+                id += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return id;
+        }
+
+        // Initialize
+        function init() {
+            myDeviceId = generateDeviceId();
+            myDeviceIdElement.textContent = myDeviceId;
+            setupSignaling();
+            showStatus('Ready to make or receive calls', 'success');
+        }
+
+        // Status Messages
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.innerHTML = `
+                <i class="ri-information-line"></i>
+                <span>${message}</span>
+            `;
+            statusContainer.innerHTML = '';
+            statusContainer.appendChild(statusDiv);
+            
+            setTimeout(() => {
+                statusDiv.remove();
+            }, 5000);
+        }
+
+        // Simple Signaling using BroadcastChannel (same browser instance)
+        // For real same-wifi usage, you'd need a simple WebSocket signaling server
+        function setupSignaling() {
+            signalingChannel = new BroadcastChannel('video-call-signaling');
+            
+            signalingChannel.onmessage = async (event) => {
+                const { type, from, to, data } = event.data;
+                
+                if (to !== myDeviceId) return;
+                
+                switch (type) {
+                    case 'offer':
+                        incomingCallData = { from, offer: data };
+                        callerDeviceIdElement.textContent = from;
+                        incomingCallModal.classList.add('active');
+                        break;
+                        
+                    case 'answer':
+                        if (peerConnection) {
+                            await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+                        }
+                        break;
+                        
+                    case 'ice-candidate':
+                        if (peerConnection && data) {
+                            await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+                        }
+                        break;
+                        
+                    case 'hang-up':
+                        endCall();
+                        showStatus('Call ended by other user', 'info');
+                        break;
+                }
+            };
+        }
+
+        // Send signaling message
+        function sendSignal(type, to, data = null) {
+            signalingChannel.postMessage({
+                type,
+                from: myDeviceId,
+                to,
+                data
+            });
+        }
+
+        // Start Local Stream
+        async function startLocalStream() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' },
+                    audio: true
+                });
+                localVideo.srcObject = localStream;
+                return true;
+            } catch (error) {
+                console.error('Error accessing media devices:', error);
+                showStatus('Failed to access camera/microphone', 'error');
+                return false;
+            }
+        }
+
+        // Create Peer Connection
+        function createPeerConnection(targetId) {
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            // Add local stream tracks
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Handle incoming stream
+            peerConnection.ontrack = (event) => {
+                remoteVideo.srcObject = event.streams[0];
+            };
+            
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    sendSignal('ice-candidate', targetId, event.candidate);
+                }
+            };
+            
+            // Connection state
+            peerConnection.onconnectionstatechange = () => {
+                console.log('Connection state:', peerConnection.connectionState);
+                if (peerConnection.connectionState === 'disconnected' || 
+                    peerConnection.connectionState === 'failed') {
+                    endCall();
+                    showStatus('Connection lost', 'error');
+                }
+            };
+        }
+
+        // Make a Call
+        async function makeCall() {
+            const targetId = targetDeviceIdInput.value.trim().toUpperCase();
+            
+            if (!targetId) {
+                showStatus('Please enter a Device ID', 'warning');
+                return;
+            }
+            
+            if (targetId === myDeviceId) {
+                showStatus('Cannot call yourself', 'warning');
+                return;
+            }
+            
+            showStatus('Connecting...', 'info');
+            
+            const streamStarted = await startLocalStream();
+            if (!streamStarted) return;
+            
+            createPeerConnection(targetId);
+            
+            // Create and send offer
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            sendSignal('offer', targetId, offer);
+            
+            showCallScreen();
+        }
+
+        // Accept Incoming Call
+        async function acceptIncomingCall() {
+            incomingCallModal.classList.remove('active');
+            
+            const streamStarted = await startLocalStream();
+            if (!streamStarted) return;
+            
+            const { from, offer } = incomingCallData;
+            createPeerConnection(from);
+            
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            sendSignal('answer', from, answer);
+            
+            showCallScreen();
+        }
+
+        // Reject Incoming Call
+        function rejectIncomingCall() {
+            incomingCallModal.classList.remove('active');
+            sendSignal('hang-up', incomingCallData.from);
+            incomingCallData = null;
+        }
+
+        // Show Call Screen
+        function showCallScreen() {
+            videoContainer.classList.add('active');
+            mainContent.style.display = 'none';
+        }
+
+        // End Call
+        function endCall() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            videoContainer.classList.remove('active');
+            mainContent.style.display = 'flex';
+            
+            localVideo.srcObject = null;
+            remoteVideo.srcObject = null;
+            
+            isAudioEnabled = true;
+            isVideoEnabled = true;
+            updateControlButtons();
+        }
+
+        // Toggle Audio
+        function toggleAudio() {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    isAudioEnabled = audioTrack.enabled;
+                    updateControlButtons();
+                }
+            }
+        }
+
+        // Toggle Video
+        function toggleVideo() {
+            if (localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.enabled = !videoTrack.enabled;
+                    isVideoEnabled = videoTrack.enabled;
+                    updateControlButtons();
+                }
+            }
+        }
+
+        // Update Control Buttons
+        function updateControlButtons() {
+            toggleAudioBtn.innerHTML = isAudioEnabled 
+                ? '<i class="ri-mic-line"></i>' 
+                : '<i class="ri-mic-off-line"></i>';
+            toggleAudioBtn.classList.toggle('muted', !isAudioEnabled);
+            
+            toggleVideoBtn.innerHTML = isVideoEnabled 
+                ? '<i class="ri-vidicon-line"></i>' 
+                : '<i class="ri-vidicon-off-line"></i>';
+            toggleVideoBtn.classList.toggle('muted', !isVideoEnabled);
+        }
+
+        // Copy Device ID
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(myDeviceId);
+            copyBtn.innerHTML = '<i class="ri-check-line"></i> Copied';
+            setTimeout(() => {
+                copyBtn.innerHTML = '<i class="ri-file-copy-line"></i> Copy';
+            }, 2000);
+        });
+
+        // Event Listeners
+        callBtn.addEventListener('click', makeCall);
+        acceptCallBtn.addEventListener('click', acceptIncomingCall);
+        rejectCallBtn.addEventListener('click', rejectIncomingCall);
+        endCallBtn.addEventListener('click', () => {
+            const targetId = targetDeviceIdInput.value.trim().toUpperCase() || incomingCallData?.from;
+            if (targetId) {
+                sendSignal('hang-up', targetId);
+            }
+            endCall();
+        });
+        toggleAudioBtn.addEventListener('click', toggleAudio);
+        toggleVideoBtn.addEventListener('click', toggleVideo);
+
+        // Initialize app
+        init();
+    </script>
+</body>
+</html>
